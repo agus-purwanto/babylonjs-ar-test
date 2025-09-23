@@ -2,51 +2,46 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Babylon.js AR Example</title>
+  <title>Babylon.js AR-lite Example</title>
   <script src="https://cdn.babylonjs.com/babylon.js"></script>
-  <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
-  <script src="https://cdn.babylonjs.com/gui/babylon.gui.min.js"></script>
-  <script src="https://cdn.babylonjs.com/babylon.max.js"></script>
   <style>
     html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
-    canvas { width: 100%; height: 100%; touch-action: none; }
+    video, canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+    video { object-fit: cover; z-index: -1; } /* camera behind */
+    canvas { z-index: 0; } /* 3D on top */
   </style>
 </head>
 <body>
-<canvas id="renderCanvas"></canvas>
-<script>
-  const canvas = document.getElementById("renderCanvas");
-  const engine = new BABYLON.Engine(canvas, true);
+  <video id="cameraFeed" autoplay playsinline></video>
+  <canvas id="renderCanvas"></canvas>
+  <script>
+    const video = document.getElementById("cameraFeed");
+    const canvas = document.getElementById("renderCanvas");
+    const engine = new BABYLON.Engine(canvas, true);
 
-  const createScene = async function () {
+    // Start camera
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+      .then(stream => { video.srcObject = stream; })
+      .catch(err => { alert("Camera access denied: " + err); });
+
+    // Babylon.js scene
     const scene = new BABYLON.Scene(engine);
 
-    // Light
+    const camera = new BABYLON.FreeCamera("camera", new BABYLON.Vector3(0, 0, -5), scene);
+    camera.setTarget(BABYLON.Vector3.Zero());
+
     const light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0, 1, 0), scene);
 
-    // AR experience
-    const xr = await scene.createDefaultXRExperienceAsync({
-      uiOptions: {
-        sessionMode: "immersive-ar",
-        referenceSpaceType: "local-floor"
-      },
-      optionalFeatures: true
+    // Example 3D object
+    const box = BABYLON.MeshBuilder.CreateBox("box", { size: 1 }, scene);
+    box.position.y = 0.5;
+
+    engine.runRenderLoop(() => {
+      box.rotation.y += 0.01; // simple animation
+      scene.render();
     });
 
-    // A floating sphere
-    const sphere = BABYLON.MeshBuilder.CreateSphere("sphere", {diameter: 0.2}, scene);
-    sphere.position = new BABYLON.Vector3(0, 0.2, -1);
-
-    return scene;
-  };
-
-  createScene().then(scene => {
-    engine.runRenderLoop(() => scene.render());
-  });
-
-  window.addEventListener("resize", () => {
-    engine.resize();
-  });
-</script>
+    window.addEventListener("resize", () => engine.resize());
+  </script>
 </body>
 </html>
