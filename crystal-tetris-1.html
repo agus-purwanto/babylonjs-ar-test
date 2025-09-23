@@ -1,0 +1,92 @@
+<script>
+const canvas = document.getElementById("renderCanvas");
+const engine = new BABYLON.Engine(canvas, true);
+
+const scene = new BABYLON.Scene(engine);
+const camera = new BABYLON.FreeCamera("cam", new BABYLON.Vector3(0, 5, -12), scene);
+camera.setTarget(BABYLON.Vector3.Zero());
+const light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0, 1, 0), scene);
+
+// Device orientation for AR-lite
+const deviceOrientation = new BABYLON.DeviceOrientationCamera("DevOr_camera", camera.position, scene);
+deviceOrientation.attachControl(canvas, true);
+scene.activeCamera = deviceOrientation;
+
+// Ground & lattice
+const ground = BABYLON.MeshBuilder.CreateGround("ground", {width: 10, height: 10}, scene);
+const groundMat = new BABYLON.StandardMaterial("gMat", scene);
+groundMat.alpha = 0.2; groundMat.wireframe = true;
+ground.material = groundMat;
+
+const lattice = BABYLON.MeshBuilder.CreateBox("lattice", {size: 6}, scene);
+const latticeMat = new BABYLON.StandardMaterial("latticeMat", scene);
+latticeMat.alpha = 0.1; latticeMat.wireframe = true;
+lattice.material = latticeMat;
+
+// Active falling block
+let activeBlock;
+let blocks = [];
+let score = 0;
+
+// Spawn new block
+function spawnBlock() {
+  const box = BABYLON.MeshBuilder.CreateBox("box", {size: 1}, scene);
+  box.position.y = 8;
+  box.position.x = 0;
+  box.position.z = 0;
+  const mat = new BABYLON.StandardMaterial("boxMat", scene);
+  mat.diffuseColor = new BABYLON.Color3(Math.random(), Math.random(), Math.random());
+  box.material = mat;
+  activeBlock = box;
+  blocks.push(box);
+}
+spawnBlock();
+
+// Tilt control variables
+let tiltX = 0; // left/right
+let tiltZ = 0; // forward/back
+
+window.addEventListener("deviceorientation", (event) => {
+  tiltX = event.gamma / 45; // normalize -1..1
+  tiltZ = event.beta / 45;  // normalize -1..1
+});
+
+// Tap = fast drop
+window.addEventListener("click", () => {
+  if (activeBlock) activeBlock.position.y -= 0.5; 
+});
+
+scene.onBeforeRenderObservable.add(() => {
+  const dt = engine.getDeltaTime() / 1000;
+
+  if (activeBlock) {
+    // Apply tilt movement
+    activeBlock.position.x += tiltX * dt * 3;
+    activeBlock.position.z += tiltZ * dt * 3;
+
+    // Keep inside lattice
+    activeBlock.position.x = Math.max(-3, Math.min(3, activeBlock.position.x));
+    activeBlock.position.z = Math.max(-3, Math.min(3, activeBlock.position.z));
+
+    // Gravity
+    activeBlock.position.y -= dt * 2;
+
+    // Stop when reaching floor
+    if (activeBlock.position.y <= 0.5) {
+      activeBlock.position.y = 0.5;
+      activeBlock = null;
+      score++;
+      document.getElementById("score").innerText = "Score: " + score;
+      spawnBlock();
+    }
+  }
+});
+
+// Camera background
+const video = document.getElementById("camera");
+navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+  .then((stream) => video.srcObject = stream);
+
+engine.runRenderLoop(() => scene.render());
+window.addEventListener("resize", () => engine.resize());
+</script>
