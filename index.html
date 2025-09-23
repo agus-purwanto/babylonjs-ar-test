@@ -1,205 +1,22 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <meta charset="utf-8">
-    <title>Babylon.js AR Test</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <style>
-        html, body {
-            overflow: hidden;
-            width: 100%;
-            height: 100%;
-            margin: 0;
-            padding: 0;
-            font-family: Arial, sans-serif;
-        }
-        #renderCanvas {
-            width: 100%;
-            height: 100%;
-            touch-action: none;
-        }
-        #arButton {
-            position: absolute;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            padding: 15px 30px;
-            background: #007bff;
-            color: white;
-            border: none;
-            border-radius: 10px;
-            font-size: 18px;
-            cursor: pointer;
-            z-index: 1000;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
-        }
-        #status {
-            position: absolute;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(0,0,0,0.8);
-            color: white;
-            padding: 15px;
-            border-radius: 10px;
-            text-align: center;
-            max-width: 90%;
-            z-index: 1000;
-        }
-        #debug {
-            position: absolute;
-            top: 80px;
-            left: 10px;
-            background: rgba(0,0,0,0.7);
-            color: white;
-            padding: 10px;
-            border-radius: 5px;
-            font-size: 12px;
-            z-index: 1000;
-            display: none;
-        }
-    </style>
+    <title>Simple AR Test</title>
+    <script src="https://cdn.babylonjs.com/babylon.js"></script>
 </head>
 <body>
-    <canvas id="renderCanvas"></canvas>
-    <button id="arButton">🚀 Start AR Experience</button>
-    <div id="status">Checking compatibility...</div>
-    <div id="debug"></div>
-
-    <script src="https://cdn.babylonjs.com/babylon.js"></script>
+    <canvas id="renderCanvas" style="width:100%; height:100%"></canvas>
     <script>
-        // Debug function
-        function debug(msg) {
-            console.log(msg);
-            document.getElementById('debug').innerHTML += msg + '<br>';
-        }
-
-        document.addEventListener('DOMContentLoaded', async function() {
-            const canvas = document.getElementById('renderCanvas');
-            const statusDiv = document.getElementById('status');
-            const arButton = document.getElementById('arButton');
-            
-            // Check WebXR support
-            if (!navigator.xr) {
-                statusDiv.innerHTML = "WebXR not supported in this browser.<br>Try Chrome or Edge on Android, or Safari on iOS 12+.";
-                arButton.disabled = true;
-                arButton.style.background = '#ccc';
-                return;
-            }
-
-            // Check AR support
-            const supported = await navigator.xr.isSessionSupported('immersive-ar');
-            if (!supported) {
-                statusDiv.innerHTML = "AR not supported on this device.<br>Requirements:<br>- iOS 12+ with ARKit<br>- Android with ARCore<br>- HTTPS connection";
-                arButton.disabled = true;
-                arButton.style.background = '#ccc';
-                return;
-            }
-
-            statusDiv.innerHTML = "AR supported! Click Start AR.";
-            arButton.disabled = false;
-
-            // Create engine and scene
-            const engine = new BABYLON.Engine(canvas, true);
-            const scene = new BABYLON.Scene(engine);
-            
-            // Simple scene setup
-            const camera = new BABYLON.FreeCamera('camera', new BABYLON.Vector3(0, 0, 0), scene);
-            const light = new BABYLON.HemisphericLight('light', new BABYLON.Vector3(0, 1, 0), scene);
-
-            arButton.addEventListener('click', async function() {
-                arButton.style.display = 'none';
-                statusDiv.innerHTML = "Starting AR...";
-                
-                try {
-                    // Create XR experience with better error handling
-                    const xr = await scene.createDefaultXRExperienceAsync({
-                        uiOptions: {
-                            sessionMode: 'immersive-ar'
-                        },
-                        optionalFeatures: ['hit-test', 'plane-detection']
-                    });
-
-                    statusDiv.innerHTML = "AR started! Move device to find surfaces.";
-                    
-                    // Wait for XR to be ready
-                    xr.baseExperience.sessionManager.onXRSessionInit.add(() => {
-                        debug("XR session initialized");
-                        statusDiv.innerHTML = "Session ready! Tap to place objects.";
-                    });
-
-                    // Safer way to handle input
-                    if (xr.baseExperience.input) {
-                        xr.baseExperience.input.onSelect.add(() => {
-                            debug("Tap detected");
-                            placeObject(scene, xr);
-                        });
-                    } else {
-                        // Fallback: use canvas click
-                        canvas.addEventListener('click', () => {
-                            debug("Canvas click detected");
-                            placeObject(scene, xr);
-                        });
-                    }
-
-                    // Enable hit-testing if available
-                    if (xr.baseExperience.featuresManager) {
-                        try {
-                            const hitTest = xr.baseExperience.featuresManager.enableFeature(BABYLON.WebXRHitTest, 'latest');
-                            hitTest.onHitTestResultObservable.add((results) => {
-                                if (results.length > 0) {
-                                    debug("Surface detected");
-                                }
-                            });
-                        } catch (e) {
-                            debug("Hit-test not available: " + e.message);
-                        }
-                    }
-
-                } catch (error) {
-                    console.error('AR Error:', error);
-                    statusDiv.innerHTML = "Error: " + error.message;
-                    arButton.style.display = 'block';
-                }
-            });
-
-            // Object placement function
-            function placeObject(scene, xr) {
-                const materials = [
-                    new BABYLON.StandardMaterial('red', scene),
-                    new BABYLON.StandardMaterial('blue', scene),
-                    new BABYLON.StandardMaterial('green', scene)
-                ];
-                materials[0].diffuseColor = new BABYLON.Color3(1, 0, 0);
-                materials[1].diffuseColor = new BABYLON.Color3(0, 0, 1);
-                materials[2].diffuseColor = new BABYLON.Color3(0, 1, 0);
-
-                const mesh = BABYLON.MeshBuilder.CreateBox('object', { size: 0.2 }, scene);
-                mesh.material = materials[Math.floor(Math.random() * 3)];
-                
-                // Simple placement in front of camera
-                if (xr.baseExperience.camera) {
-                    const camera = xr.baseExperience.camera;
-                    mesh.position.copyFrom(camera.position);
-                    mesh.position.addInPlace(camera.getDirection(BABYLON.Vector3.Forward()).scale(1));
-                } else {
-                    mesh.position.set(0, 0, 2);
-                }
-
-                // Add animation
-                scene.registerBeforeRender(() => {
-                    mesh.rotation.y += 0.01;
-                });
-
-                debug("Object placed at: " + mesh.position.toString());
-            }
-
-            // Handle resize
-            window.addEventListener('resize', () => engine.resize());
-            
-            // Run render loop
-            engine.runRenderLoop(() => scene.render());
-        });
+        const canvas = document.getElementById('renderCanvas');
+        const engine = new BABYLON.Engine(canvas, true);
+        const scene = new BABYLON.Scene(engine);
+        
+        // Try to create AR experience
+        scene.createDefaultXRExperienceAsync({ uiOptions: { sessionMode: 'immersive-ar' } })
+            .then(xr => console.log("AR started!"))
+            .catch(err => alert("AR failed: " + err.message));
+        
+        engine.runRenderLoop(() => scene.render());
     </script>
 </body>
 </html>
