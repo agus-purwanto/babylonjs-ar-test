@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Babylon.js AR Test</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <style>
+        html, body {
+            overflow: hidden;
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+        }
+        #renderCanvas {
+            width: 100%;
+            height: 100%;
+            touch-action: none;
+        }
+        #arButton {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 15px 30px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 18px;
+            cursor: pointer;
+            z-index: 1000;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        }
+        #arButton:hover {
+            background: #0056b3;
+        }
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 20px;
+            background: rgba(0,0,0,0.7);
+            padding: 20px;
+            border-radius: 10px;
+            z-index: 1000;
+        }
+        #instructions {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+            max-width: 90%;
+            z-index: 1000;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="renderCanvas"></canvas>
+    <button id="arButton">🚀 Start AR Experience</button>
+    <div id="loading">Loading Babylon.js...</div>
+    <div id="instructions">
+        Move your device to find surfaces. Tap to place 3D objects!
+    </div>
+
+    <!-- Babylon.js from CDN -->
+    <script src="https://cdn.babylonjs.com/babylon.js"></script>
+    <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const canvas = document.getElementById('renderCanvas');
+            const engine = new BABYLON.Engine(canvas, true);
+            const scene = new BABYLON.Scene(engine);
+            
+            // Create camera and light
+            const camera = new BABYLON.FreeCamera('camera', new BABYLON.Vector3(0, 0, 0), scene);
+            const light = new BABYLON.HemisphericLight('light', new BABYLON.Vector3(0, 1, 0), scene);
+            light.intensity = 0.7;
+            
+            // Hide loading text when scene is ready
+            scene.executeWhenReady(function() {
+                document.getElementById('loading').style.display = 'none';
+            });
+            
+            // AR Button click handler
+            document.getElementById('arButton').addEventListener('click', async function() {
+                this.style.display = 'none';
+                document.getElementById('instructions').style.display = 'block';
+                
+                try {
+                    // Create AR experience
+                    const xr = await scene.createDefaultXRExperienceAsync({
+                        uiOptions: {
+                            sessionMode: 'immersive-ar',
+                            referenceSpaceType: 'local-floor'
+                        }
+                    });
+                    
+                    // Enable hit testing for surface detection
+                    const featuresManager = xr.baseExperience.featuresManager;
+                    const hitTest = featuresManager.enableFeature(BABYLON.WebXRHitTest, 'latest');
+                    
+                    // Materials for objects
+                    const redMaterial = new BABYLON.StandardMaterial('red', scene);
+                    redMaterial.diffuseColor = new BABYLON.Color3(1, 0, 0);
+                    
+                    const blueMaterial = new BABYLON.StandardMaterial('blue', scene);
+                    blueMaterial.diffuseColor = new BABYLON.Color3(0, 0, 1);
+                    
+                    const greenMaterial = new BABYLON.StandardMaterial('green', scene);
+                    greenMaterial.diffuseColor = new BABYLON.Color3(0, 1, 0);
+                    
+                    let objectCount = 0;
+                    
+                    // Place object when user taps
+                    xr.baseExperience.input.onSelectObservable.add(() => {
+                        if (hitTest && hitTest.lastHitTestResult && hitTest.lastHitTestResult.length > 0) {
+                            const hit = hitTest.lastHitTestResult[0];
+                            
+                            // Create different objects based on count
+                            let mesh;
+                            if (objectCount % 3 === 0) {
+                                // Cube
+                                mesh = BABYLON.MeshBuilder.CreateBox('obj' + objectCount, {size: 0.2}, scene);
+                            } else if (objectCount % 3 === 1) {
+                                // Sphere
+                                mesh = BABYLON.MeshBuilder.CreateSphere('obj' + objectCount, {diameter: 0.2}, scene);
+                            } else {
+                                // Cylinder
+                                mesh = BABYLON.MeshBuilder.CreateCylinder('obj' + objectCount, {height: 0.2, diameter: 0.15}, scene);
+                            }
+                            
+                            // Set position from hit test
+                            hit.transformationMatrix.decompose(undefined, undefined, mesh.position);
+                            mesh.position.y += 0.1; // Lift slightly above surface
+                            
+                            // Set material
+                            const materials = [redMaterial, blueMaterial, greenMaterial];
+                            mesh.material = materials[objectCount % 3];
+                            
+                            // Add rotation animation
+                            scene.registerBeforeRender(() => {
+                                mesh.rotation.y += 0.01;
+                            });
+                            
+                            objectCount++;
+                            console.log('Object placed! Total:', objectCount);
+                        }
+                    });
+                    
+                    console.log('AR experience started successfully!');
+                    
+                } catch (error) {
+                    console.error('Error starting AR:', error);
+                    alert('AR not available on this device: ' + error.message);
+                    document.getElementById('arButton').style.display = 'block';
+                    document.getElementById('instructions').style.display = 'none';
+                }
+            });
+            
+            // Handle resize
+            window.addEventListener('resize', function() {
+                engine.resize();
+            });
+            
+            // Run render loop
+            engine.runRenderLoop(function() {
+                scene.render();
+            });
+        });
+    </script>
+</body>
+</html>
