@@ -2,12 +2,12 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Babylon.js AR-lite with Orientation</title>
+  <title>Babylon.js AR-lite Tap Placement</title>
   <script src="https://cdn.babylonjs.com/babylon.js"></script>
   <style>
     html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
     video, canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
-    video { object-fit: cover; z-index: -1; } /* camera behind */
+    video { object-fit: cover; z-index: -1; } /* camera feed behind */
     canvas { z-index: 0; } /* 3D on top */
   </style>
 </head>
@@ -19,28 +19,44 @@
     const canvas = document.getElementById("renderCanvas");
     const engine = new BABYLON.Engine(canvas, true);
 
-    // Start camera
+    // Start phone camera
     navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
       .then(stream => { video.srcObject = stream; })
       .catch(err => { alert("Camera access denied: " + err); });
 
-    // Scene
+    // Scene setup
     const scene = new BABYLON.Scene(engine);
-    scene.clearColor = new BABYLON.Color4(0, 0, 0, 0); // transparent canvas
+    scene.clearColor = new BABYLON.Color4(0, 0, 0, 0); // transparent background
 
-    // Device orientation camera (responds to phone rotation)
-    const camera = new BABYLON.DeviceOrientationCamera("DevOr_camera", new BABYLON.Vector3(0, 1, -5), scene);
+    // Camera follows phone orientation
+    const camera = new BABYLON.DeviceOrientationCamera("DevOrCamera", new BABYLON.Vector3(0, 1, -5), scene);
     camera.attachControl(canvas, true);
 
+    // Light
     const light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0, 1, 0), scene);
 
-    // Rotating cube
-    const box = BABYLON.MeshBuilder.CreateBox("box", { size: 1 }, scene);
-    box.position.z = 5; // place cube in front of camera
-    box.position.y = 0;
+    // Function to spawn cubes
+    function spawnCube() {
+      const forward = camera.getDirection(BABYLON.Axis.Z); // direction phone is pointing
+      const cube = BABYLON.MeshBuilder.CreateBox("cube", { size: 0.5 }, scene);
+      cube.position = camera.position.add(forward.scale(5)); // place 5 units ahead
+      cube.rotation.x = Math.random() * Math.PI;
+      cube.rotation.y = Math.random() * Math.PI;
+      return cube;
+    }
 
+    // Tap to add cube
+    canvas.addEventListener("click", () => {
+      spawnCube();
+    });
+
+    // Render loop
     engine.runRenderLoop(() => {
-      box.rotation.y += 0.01;
+      scene.meshes.forEach(m => {
+        if (m.name.startsWith("cube")) {
+          m.rotation.y += 0.01; // spin cubes
+        }
+      });
       scene.render();
     });
 
