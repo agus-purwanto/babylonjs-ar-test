@@ -1,217 +1,52 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <meta charset="utf-8">
-    <title>Gyroscope AR Experience</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <style>
-        html, body {
-            overflow: hidden;
-            width: 100%;
-            height: 100%;
-            margin: 0;
-            padding: 0;
-            font-family: Arial, sans-serif;
-        }
-        #renderCanvas {
-            width: 100%;
-            height: 100%;
-            touch-action: none;
-        }
-        #controls {
-            position: absolute;
-            bottom: 20px;
-            width: 100%;
-            text-align: center;
-            z-index: 1000;
-        }
-        button {
-            padding: 15px 30px;
-            margin: 10px;
-            background: #007bff;
-            color: white;
-            border: none;
-            border-radius: 10px;
-            font-size: 16px;
-            cursor: pointer;
-        }
-        #status {
-            position: absolute;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(0,0,0,0.8);
-            color: white;
-            padding: 15px;
-            border-radius: 10px;
-            text-align: center;
-            max-width: 90%;
-            z-index: 1000;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <title>Babylon.js AR Example</title>
+  <script src="https://cdn.babylonjs.com/babylon.js"></script>
+  <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
+  <script src="https://cdn.babylonjs.com/gui/babylon.gui.min.js"></script>
+  <script src="https://cdn.babylonjs.com/babylon.max.js"></script>
+  <style>
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+    canvas { width: 100%; height: 100%; touch-action: none; }
+  </style>
 </head>
 <body>
-    <canvas id="renderCanvas"></canvas>
-    <div id="status">Loading...</div>
-    <div id="controls">
-        <button id="startBtn">Start Gyro AR</button>
-        <button id="addObjBtn">Add Object</button>
-    </div>
+<canvas id="renderCanvas"></canvas>
+<script>
+  const canvas = document.getElementById("renderCanvas");
+  const engine = new BABYLON.Engine(canvas, true);
 
-    <script src="https://cdn.babylonjs.com/babylon.js"></script>
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const canvas = document.getElementById('renderCanvas');
-            const statusDiv = document.getElementById('status');
-            const startBtn = document.getElementById('startBtn');
-            const addObjBtn = document.getElementById('addObjBtn');
-            
-            const engine = new BABYLON.Engine(canvas, true);
-            const scene = new BABYLON.Scene(engine);
-            
-            // Create camera
-            const camera = new BABYLON.FreeCamera('camera', new BABYLON.Vector3(0, 0, 0), scene);
-            camera.attachControl(canvas, true);
-            
-            // Create light
-            const light = new BABYLON.HemisphericLight('light', new BABYLON.Vector3(0, 1, 0), scene);
-            light.intensity = 0.7;
-            
-            // Create ground
-            const ground = BABYLON.MeshBuilder.CreateGround('ground', {width: 10, height: 10}, scene);
-            ground.position.y = -2;
-            const groundMat = new BABYLON.StandardMaterial('groundMat', scene);
-            groundMat.diffuseColor = new BABYLON.Color3(0.3, 0.3, 0.3);
-            ground.material = groundMat;
-            
-            let objects = [];
-            let gyroEnabled = false;
-            
-            // Materials
-            const materials = [
-                new BABYLON.StandardMaterial('red', scene),
-                new BABYLON.StandardMaterial('blue', scene),
-                new BABYLON.StandardMaterial('green', scene),
-                new BABYLON.StandardMaterial('yellow', scene)
-            ];
-            materials[0].diffuseColor = new BABYLON.Color3(1, 0, 0);
-            materials[1].diffuseColor = new BABYLON.Color3(0, 0, 1);
-            materials[2].diffuseColor = new BABYLON.Color3(0, 1, 0);
-            materials[3].diffuseColor = new BABYLON.Color3(1, 1, 0);
-            
-            startBtn.addEventListener('click', function() {
-                if (!gyroEnabled) {
-                    enableGyroControls();
-                }
-            });
-            
-            addObjBtn.addEventListener('click', function() {
-                addObject();
-            });
-            
-            function enableGyroControls() {
-                if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-                    // iOS needs permission
-                    DeviceOrientationEvent.requestPermission()
-                        .then(permissionState => {
-                            if (permissionState === 'granted') {
-                                setupGyro();
-                            } else {
-                                statusDiv.innerHTML = "Gyroscope permission denied";
-                            }
-                        })
-                        .catch(console.error);
-                } else {
-                    // Android and others
-                    setupGyro();
-                }
-            }
-            
-            function setupGyro() {
-                window.addEventListener('deviceorientation', function(event) {
-                    if (event.alpha !== null && event.beta !== null && event.gamma !== null) {
-                        // Convert device orientation to camera rotation
-                        const alpha = event.alpha * (Math.PI / 180); // Z-axis rotation
-                        const beta = event.beta * (Math.PI / 180);   // X-axis rotation  
-                        const gamma = event.gamma * (Math.PI / 180); // Y-axis rotation
-                        
-                        camera.rotation.x = beta * 0.5; // Reduced sensitivity
-                        camera.rotation.y = alpha * 0.5;
-                        camera.rotation.z = gamma * 0.3;
-                        
-                        gyroEnabled = true;
-                        statusDiv.innerHTML = "Gyro AR Active! Move your phone.<br>Tap 'Add Object' to place 3D objects.";
-                        startBtn.innerHTML = "Gyro Active";
-                        startBtn.style.background = '#28a745';
-                    }
-                });
-                
-                // Also handle device motion for movement
-                window.addEventListener('devicemotion', function(event) {
-                    if (event.accelerationIncludingGravity && gyroEnabled) {
-                        const accel = event.accelerationIncludingGravity;
-                        // Simple movement based on acceleration
-                        camera.position.x += accel.x * 0.001;
-                        camera.position.y += accel.y * 0.001;
-                        camera.position.z += accel.z * 0.001;
-                    }
-                });
-            }
-            
-            function addObject() {
-                if (!gyroEnabled) {
-                    statusDiv.innerHTML = "Start Gyro AR first!";
-                    return;
-                }
-                
-                // Create random object in front of camera
-                const types = ['box', 'sphere', 'cylinder'];
-                const type = types[Math.floor(Math.random() * types.length)];
-                
-                let mesh;
-                switch(type) {
-                    case 'box':
-                        mesh = BABYLON.MeshBuilder.CreateBox('obj', {size: 0.5}, scene);
-                        break;
-                    case 'sphere':
-                        mesh = BABYLON.MeshBuilder.CreateSphere('obj', {diameter: 0.5}, scene);
-                        break;
-                    case 'cylinder':
-                        mesh = BABYLON.MeshBuilder.CreateCylinder('obj', {height: 0.5, diameter: 0.3}, scene);
-                        break;
-                }
-                
-                // Place object 3 units in front of camera
-                const forward = new BABYLON.Vector3(0, 0, 1);
-                const direction = forward.rotateByQuaternionToRef(camera.rotationQuaternion, new BABYLON.Vector3());
-                mesh.position.copyFrom(camera.position);
-                mesh.position.addInPlace(direction.scale(3));
-                
-                mesh.material = materials[objects.length % materials.length];
-                
-                // Add animation
-                scene.registerBeforeRender(() => {
-                    mesh.rotation.y += 0.02;
-                    mesh.rotation.x += 0.01;
-                });
-                
-                objects.push(mesh);
-                statusDiv.innerHTML = `Object placed! Total: ${objects.length}`;
-            }
-            
-            // Initial status
-            statusDiv.innerHTML = "Click 'Start Gyro AR' to begin!<br>This uses your phone's gyroscope.";
-            
-            // Handle resize
-            window.addEventListener('resize', function() {
-                engine.resize();
-            });
-            
-            // Run render loop
-            engine.runRenderLoop(function() {
-                scene.render();
-            });
-        });
-    </script>
+  const createScene = async function () {
+    const scene = new BABYLON.Scene(engine);
+
+    // Light
+    const light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0, 1, 0), scene);
+
+    // AR experience
+    const xr = await scene.createDefaultXRExperienceAsync({
+      uiOptions: {
+        sessionMode: "immersive-ar",
+        referenceSpaceType: "local-floor"
+      },
+      optionalFeatures: true
+    });
+
+    // A floating sphere
+    const sphere = BABYLON.MeshBuilder.CreateSphere("sphere", {diameter: 0.2}, scene);
+    sphere.position = new BABYLON.Vector3(0, 0.2, -1);
+
+    return scene;
+  };
+
+  createScene().then(scene => {
+    engine.runRenderLoop(() => scene.render());
+  });
+
+  window.addEventListener("resize", () => {
+    engine.resize();
+  });
+</script>
 </body>
 </html>
