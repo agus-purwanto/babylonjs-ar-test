@@ -33,22 +33,7 @@
             z-index: 1000;
             box-shadow: 0 4px 8px rgba(0,0,0,0.3);
         }
-        #arButton:hover {
-            background: #0056b3;
-        }
-        #loading {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            color: white;
-            font-size: 20px;
-            background: rgba(0,0,0,0.7);
-            padding: 20px;
-            border-radius: 10px;
-            z-index: 1000;
-        }
-        #instructions {
+        #status {
             position: absolute;
             top: 20px;
             left: 50%;
@@ -60,6 +45,17 @@
             text-align: center;
             max-width: 90%;
             z-index: 1000;
+        }
+        #debug {
+            position: absolute;
+            top: 80px;
+            left: 10px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 12px;
+            z-index: 1000;
             display: none;
         }
     </style>
@@ -67,116 +63,142 @@
 <body>
     <canvas id="renderCanvas"></canvas>
     <button id="arButton">🚀 Start AR Experience</button>
-    <div id="loading">Loading Babylon.js...</div>
-    <div id="instructions">
-        Move your device to find surfaces. Tap to place 3D objects!
-    </div>
+    <div id="status">Checking compatibility...</div>
+    <div id="debug"></div>
 
-    <!-- Babylon.js from CDN -->
     <script src="https://cdn.babylonjs.com/babylon.js"></script>
-    <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
-    
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
+        // Debug function
+        function debug(msg) {
+            console.log(msg);
+            document.getElementById('debug').innerHTML += msg + '<br>';
+        }
+
+        document.addEventListener('DOMContentLoaded', async function() {
             const canvas = document.getElementById('renderCanvas');
+            const statusDiv = document.getElementById('status');
+            const arButton = document.getElementById('arButton');
+            
+            // Check WebXR support
+            if (!navigator.xr) {
+                statusDiv.innerHTML = "WebXR not supported in this browser.<br>Try Chrome or Edge on Android, or Safari on iOS 12+.";
+                arButton.disabled = true;
+                arButton.style.background = '#ccc';
+                return;
+            }
+
+            // Check AR support
+            const supported = await navigator.xr.isSessionSupported('immersive-ar');
+            if (!supported) {
+                statusDiv.innerHTML = "AR not supported on this device.<br>Requirements:<br>- iOS 12+ with ARKit<br>- Android with ARCore<br>- HTTPS connection";
+                arButton.disabled = true;
+                arButton.style.background = '#ccc';
+                return;
+            }
+
+            statusDiv.innerHTML = "AR supported! Click Start AR.";
+            arButton.disabled = false;
+
+            // Create engine and scene
             const engine = new BABYLON.Engine(canvas, true);
             const scene = new BABYLON.Scene(engine);
             
-            // Create camera and light
+            // Simple scene setup
             const camera = new BABYLON.FreeCamera('camera', new BABYLON.Vector3(0, 0, 0), scene);
             const light = new BABYLON.HemisphericLight('light', new BABYLON.Vector3(0, 1, 0), scene);
-            light.intensity = 0.7;
-            
-            // Hide loading text when scene is ready
-            scene.executeWhenReady(function() {
-                document.getElementById('loading').style.display = 'none';
-            });
-            
-            // AR Button click handler
-            document.getElementById('arButton').addEventListener('click', async function() {
-                this.style.display = 'none';
-                document.getElementById('instructions').style.display = 'block';
+
+            arButton.addEventListener('click', async function() {
+                arButton.style.display = 'none';
+                statusDiv.innerHTML = "Starting AR...";
                 
                 try {
-                    // Create AR experience
+                    // Create XR experience with better error handling
                     const xr = await scene.createDefaultXRExperienceAsync({
                         uiOptions: {
-                            sessionMode: 'immersive-ar',
-                            referenceSpaceType: 'local-floor'
-                        }
+                            sessionMode: 'immersive-ar'
+                        },
+                        optionalFeatures: ['hit-test', 'plane-detection']
                     });
+
+                    statusDiv.innerHTML = "AR started! Move device to find surfaces.";
                     
-                    // Enable hit testing for surface detection
-                    const featuresManager = xr.baseExperience.featuresManager;
-                    const hitTest = featuresManager.enableFeature(BABYLON.WebXRHitTest, 'latest');
-                    
-                    // Materials for objects
-                    const redMaterial = new BABYLON.StandardMaterial('red', scene);
-                    redMaterial.diffuseColor = new BABYLON.Color3(1, 0, 0);
-                    
-                    const blueMaterial = new BABYLON.StandardMaterial('blue', scene);
-                    blueMaterial.diffuseColor = new BABYLON.Color3(0, 0, 1);
-                    
-                    const greenMaterial = new BABYLON.StandardMaterial('green', scene);
-                    greenMaterial.diffuseColor = new BABYLON.Color3(0, 1, 0);
-                    
-                    let objectCount = 0;
-                    
-                    // Place object when user taps
-                    xr.baseExperience.input.onSelectObservable.add(() => {
-                        if (hitTest && hitTest.lastHitTestResult && hitTest.lastHitTestResult.length > 0) {
-                            const hit = hitTest.lastHitTestResult[0];
-                            
-                            // Create different objects based on count
-                            let mesh;
-                            if (objectCount % 3 === 0) {
-                                // Cube
-                                mesh = BABYLON.MeshBuilder.CreateBox('obj' + objectCount, {size: 0.2}, scene);
-                            } else if (objectCount % 3 === 1) {
-                                // Sphere
-                                mesh = BABYLON.MeshBuilder.CreateSphere('obj' + objectCount, {diameter: 0.2}, scene);
-                            } else {
-                                // Cylinder
-                                mesh = BABYLON.MeshBuilder.CreateCylinder('obj' + objectCount, {height: 0.2, diameter: 0.15}, scene);
-                            }
-                            
-                            // Set position from hit test
-                            hit.transformationMatrix.decompose(undefined, undefined, mesh.position);
-                            mesh.position.y += 0.1; // Lift slightly above surface
-                            
-                            // Set material
-                            const materials = [redMaterial, blueMaterial, greenMaterial];
-                            mesh.material = materials[objectCount % 3];
-                            
-                            // Add rotation animation
-                            scene.registerBeforeRender(() => {
-                                mesh.rotation.y += 0.01;
+                    // Wait for XR to be ready
+                    xr.baseExperience.sessionManager.onXRSessionInit.add(() => {
+                        debug("XR session initialized");
+                        statusDiv.innerHTML = "Session ready! Tap to place objects.";
+                    });
+
+                    // Safer way to handle input
+                    if (xr.baseExperience.input) {
+                        xr.baseExperience.input.onSelect.add(() => {
+                            debug("Tap detected");
+                            placeObject(scene, xr);
+                        });
+                    } else {
+                        // Fallback: use canvas click
+                        canvas.addEventListener('click', () => {
+                            debug("Canvas click detected");
+                            placeObject(scene, xr);
+                        });
+                    }
+
+                    // Enable hit-testing if available
+                    if (xr.baseExperience.featuresManager) {
+                        try {
+                            const hitTest = xr.baseExperience.featuresManager.enableFeature(BABYLON.WebXRHitTest, 'latest');
+                            hitTest.onHitTestResultObservable.add((results) => {
+                                if (results.length > 0) {
+                                    debug("Surface detected");
+                                }
                             });
-                            
-                            objectCount++;
-                            console.log('Object placed! Total:', objectCount);
+                        } catch (e) {
+                            debug("Hit-test not available: " + e.message);
                         }
-                    });
-                    
-                    console.log('AR experience started successfully!');
-                    
+                    }
+
                 } catch (error) {
-                    console.error('Error starting AR:', error);
-                    alert('AR not available on this device: ' + error.message);
-                    document.getElementById('arButton').style.display = 'block';
-                    document.getElementById('instructions').style.display = 'none';
+                    console.error('AR Error:', error);
+                    statusDiv.innerHTML = "Error: " + error.message;
+                    arButton.style.display = 'block';
                 }
             });
-            
+
+            // Object placement function
+            function placeObject(scene, xr) {
+                const materials = [
+                    new BABYLON.StandardMaterial('red', scene),
+                    new BABYLON.StandardMaterial('blue', scene),
+                    new BABYLON.StandardMaterial('green', scene)
+                ];
+                materials[0].diffuseColor = new BABYLON.Color3(1, 0, 0);
+                materials[1].diffuseColor = new BABYLON.Color3(0, 0, 1);
+                materials[2].diffuseColor = new BABYLON.Color3(0, 1, 0);
+
+                const mesh = BABYLON.MeshBuilder.CreateBox('object', { size: 0.2 }, scene);
+                mesh.material = materials[Math.floor(Math.random() * 3)];
+                
+                // Simple placement in front of camera
+                if (xr.baseExperience.camera) {
+                    const camera = xr.baseExperience.camera;
+                    mesh.position.copyFrom(camera.position);
+                    mesh.position.addInPlace(camera.getDirection(BABYLON.Vector3.Forward()).scale(1));
+                } else {
+                    mesh.position.set(0, 0, 2);
+                }
+
+                // Add animation
+                scene.registerBeforeRender(() => {
+                    mesh.rotation.y += 0.01;
+                });
+
+                debug("Object placed at: " + mesh.position.toString());
+            }
+
             // Handle resize
-            window.addEventListener('resize', function() {
-                engine.resize();
-            });
+            window.addEventListener('resize', () => engine.resize());
             
             // Run render loop
-            engine.runRenderLoop(function() {
-                scene.render();
-            });
+            engine.runRenderLoop(() => scene.render());
         });
     </script>
 </body>
