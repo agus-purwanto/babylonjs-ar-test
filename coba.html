@@ -38,7 +38,7 @@
     // Function to spawn cubes
     function spawnCube() {
       const forward = camera.getDirection(BABYLON.Axis.Z); // direction phone is pointing
-      const cube = BABYLON.MeshBuilder.CreateBox("cube", { size: 0.5 }, scene);
+      const cube = BABYLON.MeshBuilder.CreateSphere("cube", { size: 0.5 }, scene);
       cube.position = camera.position.add(forward.scale(5)); // place 5 units ahead
       cube.rotation.x = Math.random() * Math.PI;
       cube.rotation.y = Math.random() * Math.PI;
