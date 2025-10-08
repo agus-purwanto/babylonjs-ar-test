@@ -1,0 +1,98 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>Babylon Pulse + Synth Heartbeat</title>
+  <script src="https://cdn.babylonjs.com/babylon.js"></script>
+</head>
+<body>
+  <canvas id="renderCanvas" style="width:100vw;height:100vh;"></canvas>
+  <button id="startBtn" style="position:absolute;left:10px;top:10px;z-index:10;">Start (klik)</button>
+
+  <script>
+    const canvas = document.getElementById("renderCanvas");
+    const engine = new BABYLON.Engine(canvas, true);
+    const scene = new BABYLON.Scene(engine);
+
+    const camera = new BABYLON.ArcRotateCamera("cam", Math.PI/2, Math.PI/3, 6, BABYLON.Vector3.Zero(), scene);
+    camera.attachControl(canvas, true);
+    new BABYLON.HemisphericLight("h", new BABYLON.Vector3(0,1,0), scene);
+
+    const sphere = BABYLON.MeshBuilder.CreateSphere("s", {diameter: 1}, scene);
+    sphere.position.y = 0;
+    const mat = new BABYLON.StandardMaterial("m", scene);
+    mat.diffuseColor = new BABYLON.Color3(0.9,0.2,0.2);
+    sphere.material = mat;
+
+    // WebAudio synth untuk heartbeat
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const masterGain = audioCtx.createGain();
+    masterGain.gain.value = 1.0;
+    masterGain.connect(audioCtx.destination);
+
+    function playPulse(timeFromNow = 0, frequency = 70, duration = 0.08, volume = 1.8) {
+      // low click using short bandpass burst
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      const bp = audioCtx.createBiquadFilter();
+      bp.type = "bandpass";
+      bp.frequency.value = frequency; // low frequency click ~60-150Hz
+      osc.type = "sine";
+      osc.frequency.value = frequency * 3; // give some harmonic
+      gain.gain.setValueAtTime(0.0001, audioCtx.currentTime + timeFromNow);
+      gain.gain.exponentialRampToValueAtTime(volume, audioCtx.currentTime + timeFromNow + 0.005);
+      gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + timeFromNow + duration);
+
+      osc.connect(bp);
+      bp.connect(gain);
+      gain.connect(masterGain);
+
+      osc.start(audioCtx.currentTime + timeFromNow);
+      osc.stop(audioCtx.currentTime + timeFromNow + duration + 0.02);
+    }
+
+    // Compose "lub-dub" as two pulses close together
+    function playHeartBeatPattern() {
+      // first strong beat
+      playPulse(0, 70, 0.06, 1.0);
+      // small pause then weaker second beat
+      playPulse(0.14, 90, 0.05, 0.6);
+    }
+
+    let running = false;
+    const beatInterval = 800; // ms
+    let time = 0;
+    let lastBeat = 0;
+    const baseScale = 1, pulseScale = 1.2, pulseDuration = 500;
+
+    document.getElementById("startBtn").addEventListener("click", async () => {
+      await audioCtx.resume();
+      running = true;
+      document.getElementById("startBtn").style.display = "none";
+    });
+
+    scene.onBeforeRenderObservable.add(() => {
+      const dt = engine.getDeltaTime();
+      if (!running) return;
+      time += dt;
+      if (time - lastBeat >= beatInterval) {
+        // play synthesized pattern
+        playHeartBeatPattern();
+        lastBeat = time;
+      }
+      // scale envelope similar to before
+      const tSince = time - lastBeat;
+      let s = baseScale;
+      if (tSince >= 0 && tSince < pulseDuration) {
+        const x = tSince / pulseDuration;
+        s = baseScale + (pulseScale - baseScale) * Math.sin(Math.PI * x);
+      }
+      sphere.scaling = new BABYLON.Vector3(s, s, s);
+    });
+
+    engine.runRenderLoop(() => scene.render());
+    window.addEventListener("resize", () => engine.resize());
+  </script>
+</body>
+</html>
+
